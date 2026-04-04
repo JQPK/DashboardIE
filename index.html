@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Académico Julio C. Tello</title>
+    
+    <!-- PapaParse para procesar CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <!-- Chart.js para los gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- PptxGenJS (PowerPoint) -->
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Navigation -->
+        <aside class="sidebar">
+            <div class="logo-container">
+                <i data-lucide="graduation-cap" class="logo-icon"></i>
+                <h2>Julio C. Tello</h2>
+                <p>Dashboard Académico</p>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active">
+                    <i data-lucide="layout-dashboard"></i> Resumen General
+                </a>
+                <a href="#" class="nav-item">
+                    <i data-lucide="book-open"></i> Por Cursos
+                </a>
+                <a href="#" class="nav-item">
+                    <i data-lucide="users"></i> Docentes
+                </a>
+                <a href="#" class="nav-item">
+                    <i data-lucide="target"></i> Alertas y Mitigación
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="header-title">
+                    <h1>Análisis de Rendimiento Escolar</h1>
+                    <p>Visualice las notas y el desempeño de los alumnos.</p>
+                </div>
+                <div id="export-controls" class="hidden" style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary" onclick="generateReport('word')" style="background-color: #3b82f6; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="file-text"></i> Word</button>
+                    <button class="btn btn-primary" onclick="generateReport('ppt')" style="background-color: #f97316; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="monitor-play"></i> PPT</button>
+                </div>
+            </header>
+
+            <!-- Upload Zone -->
+            <section id="upload-section" class="upload-section">
+                <div class="drag-drop-zone" id="drop-zone">
+                    <i data-lucide="upload-cloud" class="upload-icon"></i>
+                    <h3>Arrastra y suelta tu archivo CSV aquí</h3>
+                    <p>o haz clic para seleccionar manualmente</p>
+                    <input type="file" id="csv-file" accept=".csv" class="file-input">
+                    <button class="btn btn-primary" onclick="document.getElementById('csv-file').click()">
+                        Seleccionar Archivo
+                    </button>
+                    <div id="upload-error" class="error-message"></div>
+                </div>
+            </section>
+
+            <!-- Dashboard Hidden initially -->
+            <section id="dashboard" class="dashboard-section hidden">
+                
+                <!-- Filters -->
+                <div class="filters-panel glass-panel">
+                    <div class="filter-group">
+                        <label>Curso / Área</label>
+                        <select id="filter-course">
+                            <option value="all">Todos los cursos</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Docente</label>
+                        <select id="filter-teacher">
+                            <option value="all">Todos los docentes</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Grado</label>
+                        <select id="filter-grade">
+                            <option value="all">Todos los grados</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Sección</label>
+                        <select id="filter-section">
+                            <option value="all">Todas las secciones</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="kpi-grid">
+                    <div class="kpi-card box-shadow-soft">
+                        <div class="kpi-icon blue"><i data-lucide="users"></i></div>
+                        <div class="kpi-data">
+                            <h4>Total Alumnos</h4>
+                            <span id="kpi-students">0</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card box-shadow-soft">
+                        <div class="kpi-icon yellow"><i data-lucide="book-open"></i></div>
+                        <div class="kpi-data">
+                            <h4>Cursos Evaluados</h4>
+                            <span id="kpi-courses">0</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card box-shadow-soft">
+                        <div class="kpi-icon green"><i data-lucide="award"></i></div>
+                        <div class="kpi-data">
+                            <h4>% Logrado Global</h4>
+                            <span id="kpi-achievement">0%</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card box-shadow-soft">
+                        <div class="kpi-icon alert"><i data-lucide="alert-triangle"></i></div>
+                        <div class="kpi-data">
+                            <h4>Cursos en Alerta</h4>
+                            <span id="kpi-alerts">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Area -->
+                <div class="charts-grid">
+                    <div class="chart-container box-shadow-soft col-span-1">
+                        <h3>Distribución de Logro Global</h3>
+                        <div class="canvas-wrapper">
+                            <canvas id="global-achievement-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container box-shadow-soft col-span-2">
+                        <h3>Desempeño por Cursos</h3>
+                        <div class="canvas-wrapper">
+                            <canvas id="course-performance-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid mt-4">
+                    <div class="chart-container box-shadow-soft col-span-1">
+                        <h3>Desempeño Promedio por Competencia</h3>
+                        <div class="canvas-wrapper">
+                            <canvas id="competency-radar-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container box-shadow-soft col-span-2">
+                        <h3>Comparativo General por Docente</h3>
+                        <div class="canvas-wrapper">
+                            <canvas id="teacher-comparison-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Strengths & Weaknesses Panel -->
+                <div class="insights-panel mt-4 box-shadow-soft">
+                    <h3>Análisis e Insights Automáticos</h3>
+                    <div class="insights-grid">
+                        <div class="insight-card positive">
+                            <h4><i data-lucide="trending-up"></i> Fortalezas Detectadas</h4>
+                            <ul id="strengths-list"></ul>
+                        </div>
+                        <div class="insight-card negative">
+                            <h4><i data-lucide="trending-down"></i> Oportunidades de Mejora</h4>
+                            <ul id="weaknesses-list"></ul>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="app.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
