@@ -27,7 +27,7 @@
 <body>
     <div class="app-container">
         <!-- Sidebar / Navigation -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="logo-container">
                 <i data-lucide="graduation-cap" class="logo-icon"></i>
                 <h2>Julio C. Tello</h2>
@@ -35,27 +35,24 @@
             </div>
             
             <nav class="nav-menu">
-                <a href="#" class="nav-item active">
+                <a href="#" class="nav-item active" id="nav-dashboard">
                     <i data-lucide="layout-dashboard"></i> <span>Resumen General</span>
                 </a>
-                <a href="#" class="nav-item">
-                    <i data-lucide="book-open"></i> <span>Por Cursos</span>
-                </a>
-                <a href="#" class="nav-item">
-                    <i data-lucide="users"></i> <span>Docentes</span>
-                </a>
-                <a href="#" class="nav-item">
-                    <i data-lucide="target"></i> <span>Alertas y Mitigación</span>
+                <a href="#" class="nav-item" id="nav-students">
+                    <i data-lucide="users"></i> <span>Alumnos</span>
                 </a>
             </nav>
         </aside>
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="main-content" id="main-content">
             <header class="top-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="header-title">
-                    <h1>Análisis de Rendimiento Escolar</h1>
-                    <p>Visualice las notas y el desempeño de los alumnos.</p>
+                <div class="header-title" style="display: flex; align-items: center; gap: 1rem;">
+                    <button id="menu-toggle" class="btn box-shadow-soft" style="background-color: #fff; padding: 0.5rem; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center;"><i data-lucide="menu"></i></button>
+                    <div>
+                        <h1>Análisis de Rendimiento Escolar</h1>
+                        <p>Visualice las notas y el desempeño de los alumnos.</p>
+                    </div>
                 </div>
                 <div id="export-controls" class="hidden" style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-primary" onclick="generateReport('word')" style="background-color: #3b82f6; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="file-text"></i> Word</button>
@@ -186,6 +183,70 @@
                     </div>
                 </div>
 
+            </section>
+
+            <!-- Students Table View -->
+            <section id="students-view" class="dashboard-section hidden">
+                <div class="filters-panel glass-panel">
+                    <div class="filter-group">
+                        <label>Curso / Área</label>
+                        <select id="sv-filter-course">
+                            <option value="all">Todos los cursos</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Grado</label>
+                        <select id="sv-filter-grade">
+                            <option value="all">Todos los grados</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Sección</label>
+                        <select id="sv-filter-section">
+                            <option value="all">Todas las secciones</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Estado</label>
+                        <select id="sv-filter-status">
+                            <option value="all">Todos</option>
+                            <option value="3">Logrado</option>
+                            <option value="2">Proceso</option>
+                            <option value="1">Inicio</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="kpi-grid" style="grid-template-columns: 1fr; margin-bottom: 2rem;">
+                    <div class="kpi-card box-shadow-soft" style="display: flex; align-items: center; padding: 1.5rem; background: #f8fafc; border: 1px solid #e2e8f0;">
+                        <div class="kpi-icon" style="background: rgba(14, 165, 233, 0.1); color: #0ea5e9; margin-right: 1.5rem;"><i data-lucide="user-check"></i></div>
+                        <div>
+                            <h4 style="color: #64748b; font-size: 0.875rem; text-transform: uppercase;">Docente a Cargo</h4>
+                            <span id="sv-teacher-name" style="font-size: 1.25rem; font-weight: 700; color: #1e293b;">Múltiples (Filtre Curso, Grado y Sección)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding: 1.5rem;">
+                    <h3 style="color: #0369a1; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="list"></i> Registro de Alumnos</h3>
+                    <div style="overflow-x: auto;">
+                        <table class="students-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="background-color: #f1f5f9; border-bottom: 2px solid #e2e8f0;">
+                                    <th style="padding: 1rem; color: #475569;">#</th>
+                                    <th style="padding: 1rem; color: #475569;">Alumno</th>
+                                    <th style="padding: 1rem; color: #475569;">Curso</th>
+                                    <th style="padding: 1rem; color: #475569;">Grado</th>
+                                    <th style="padding: 1rem; color: #475569;">Sección</th>
+                                    <th style="padding: 1rem; color: #475569;">Nivel de Logro</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sv-table-body">
+                                <tr><td colspan="6" style="padding: 1rem; text-align: center; color: #64748b;">No hay datos para mostrar</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
         </main>
     </div>

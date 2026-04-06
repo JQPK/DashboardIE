@@ -5,6 +5,17 @@ let charts = {};
 
 document.addEventListener('DOMContentLoaded', () => {
     setupDragAndDrop();
+
+    const menuToggle = document.getElementById('menu-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    
+    if(menuToggle && sidebar && mainContent) {
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('expanded');
+        });
+    }
 });
 
 function setupDragAndDrop() {
@@ -170,13 +181,159 @@ function initDashboard() {
     document.getElementById('dashboard').classList.remove('hidden');
     document.getElementById('export-controls').classList.remove('hidden');
     
+    // Filtros del Dashboard General
     document.getElementById('filter-course').addEventListener('change', () => { updateFilters('course'); updateDashboard(); });
     document.getElementById('filter-teacher').addEventListener('change', () => { updateFilters('teacher'); updateDashboard(); });
     document.getElementById('filter-grade').addEventListener('change', () => { updateFilters('grade'); updateDashboard(); });
     document.getElementById('filter-section').addEventListener('change', () => { updateFilters('section'); updateDashboard(); });
     
+    // Filtros de la Vista Alumnos
+    document.getElementById('sv-filter-course').addEventListener('change', () => { updateStudentsFilters('course'); updateStudentsView(); });
+    document.getElementById('sv-filter-grade').addEventListener('change', () => { updateStudentsFilters('grade'); updateStudentsView(); });
+    document.getElementById('sv-filter-section').addEventListener('change', () => { updateStudentsFilters('section'); updateStudentsView(); });
+    document.getElementById('sv-filter-status').addEventListener('change', () => { updateStudentsView(); });
+
+    // Navegacion Principal
+    document.getElementById('nav-dashboard').addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('nav-dashboard').classList.add('active');
+        document.getElementById('nav-students').classList.remove('active');
+        
+        document.getElementById('dashboard').classList.remove('hidden');
+        document.getElementById('export-controls').classList.remove('hidden');
+        
+        document.getElementById('students-view').classList.add('hidden');
+    });
+
+    document.getElementById('nav-students').addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('nav-students').classList.add('active');
+        document.getElementById('nav-dashboard').classList.remove('active');
+        
+        document.getElementById('students-view').classList.remove('hidden');
+        
+        document.getElementById('dashboard').classList.add('hidden');
+        document.getElementById('export-controls').classList.add('hidden'); // Ocultar exportacion si no se requiere aqui
+        
+        // Inicializar si no se ha hecho
+        if(document.getElementById('sv-filter-course').options.length <= 1) {
+            updateStudentsFilters('all');
+            updateStudentsView();
+        }
+    });
+
     updateFilters('all');
     updateDashboard();
+}
+
+function updateStudentsFilters(changedSelect) {
+    const selects = {
+        course: document.getElementById('sv-filter-course'),
+        grade: document.getElementById('sv-filter-grade'),
+        section: document.getElementById('sv-filter-section')
+    };
+
+    const vals = {
+        course: selects.course.value,
+        grade: selects.grade.value,
+        section: selects.section.value
+    };
+
+    const getAvailable = (field) => {
+        return [...new Set(globalData.filter(d => {
+            if (field !== 'course' && vals.course !== 'all' && d.course !== vals.course) return false;
+            if (field !== 'grade' && vals.grade !== 'all' && d.grade !== vals.grade) return false;
+            if (field !== 'section' && vals.section !== 'all' && d.section !== vals.section) return false;
+            return true;
+        }).map(d => d[field]))].filter(Boolean).sort();
+    };
+
+    const repopulate = (field, defaultLabel) => {
+        if (changedSelect === field) return;
+        const available = getAvailable(field);
+        const el = selects[field];
+        const currentVal = el.value;
+        
+        el.innerHTML = `<option value="all">${defaultLabel}</option>`;
+        available.forEach(optVal => {
+            const opt = document.createElement('option');
+            opt.value = optVal;
+            opt.innerText = optVal;
+            el.appendChild(opt);
+        });
+        
+        if (available.includes(currentVal)) {
+            el.value = currentVal;
+        } else {
+            el.value = 'all'; 
+        }
+    };
+
+    repopulate('course', 'Todos los cursos');
+    repopulate('grade', 'Todos los grados');
+    repopulate('section', 'Todas las secciones');
+}
+
+function updateStudentsView() {
+    const courseF = document.getElementById('sv-filter-course').value;
+    const gradeF = document.getElementById('sv-filter-grade').value;
+    const sectionF = document.getElementById('sv-filter-section').value;
+    const statusF = document.getElementById('sv-filter-status').value;
+
+    let filtered = globalData;
+    if (courseF !== 'all') filtered = filtered.filter(d => d.course === courseF);
+    if (gradeF !== 'all') filtered = filtered.filter(d => d.grade === gradeF);
+    if (sectionF !== 'all') filtered = filtered.filter(d => d.section === sectionF);
+    
+    // Lógica del Docente (Auto-calculada base en Data ya Filtrada (ignorando el estatus general para el docente))
+    const uniqueTeachers = [...new Set(filtered.map(d => d.teacher))].filter(Boolean);
+    const teacherNameLabel = document.getElementById('sv-teacher-name');
+    
+    if (uniqueTeachers.length === 0) {
+        teacherNameLabel.innerText = "N/A";
+    } else if (uniqueTeachers.length === 1) {
+        teacherNameLabel.innerText = uniqueTeachers[0];
+    } else {
+        teacherNameLabel.innerText = "Múltiples (Filtre Curso, Grado y Sección)";
+    }
+
+    // Aplicar ademas el filtro de Estado para llenar la tabla
+    if (statusF !== 'all') {
+        const tgtStatus = parseInt(statusF);
+        filtered = filtered.filter(d => d.finalStatus === tgtStatus);
+    }
+
+    const tbody = document.getElementById('sv-table-body');
+    tbody.innerHTML = '';
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding: 1rem; text-align: center; color: #64748b;">No hay alumnos para estos criterios</td></tr>`;
+        return;
+    }
+
+    // Ordenar alfabeticamente
+    filtered.sort((a,b) => a.student.localeCompare(b.student));
+
+    filtered.forEach((d, idx) => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = "1px solid #e2e8f0";
+        
+        let statusBadge = "";
+        if(d.finalStatus === 3) statusBadge = `<span style="background-color: #d1fae5; color: #065f46; padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: 600; font-size: 0.875rem;">Logrado</span>`;
+        if(d.finalStatus === 2) statusBadge = `<span style="background-color: #fef3c7; color: #92400e; padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: 600; font-size: 0.875rem;">Proceso</span>`;
+        if(d.finalStatus === 1) statusBadge = `<span style="background-color: #fee2e2; color: #991b1b; padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: 600; font-size: 0.875rem;">Inicio</span>`;
+        if(!d.finalStatus) statusBadge = "S/D";
+
+        tr.innerHTML = `
+            <td style="padding: 1rem; color: #64748b;">${idx + 1}</td>
+            <td style="padding: 1rem; font-weight: 500; color: #1e293b;">${d.student}</td>
+            <td style="padding: 1rem; color: #334155;">${d.course}</td>
+            <td style="padding: 1rem; color: #475569;">${d.grade || 'N/A'}</td>
+            <td style="padding: 1rem; color: #475569;">${d.section || 'N/A'}</td>
+            <td style="padding: 1rem;">${statusBadge}</td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
 function updateFilters(changedSelect) {
@@ -502,40 +659,67 @@ function generateReport(type) {
         weaknesses: extractInsightsText('weaknesses-list')
     };
 
+    const getCanvasImage = (id) => {
+        const canvas = document.getElementById(id);
+        if(!canvas) return null;
+        return canvas.toDataURL('image/png', 1.0);
+    };
+
+    const images = {
+        global: getCanvasImage('global-achievement-chart'),
+        course: getCanvasImage('course-performance-chart'),
+        radar: getCanvasImage('competency-radar-chart'),
+        teacher: getCanvasImage('teacher-comparison-chart')
+    };
+
     const reportName = `Reporte_Academico_${new Date().toISOString().split('T')[0]}`;
 
     try {
-        if (type === 'ppt') generatePPT(reportName, stats);
-        else if (type === 'word') generateWord(reportName, stats);
+        if (type === 'ppt') generatePPT(reportName, stats, images);
+        else if (type === 'word') generateWord(reportName, stats, images);
     } catch (e) {
         console.error("Error generando reporte:", e);
         alert("Ocurrió un error inicializando el exportador: " + e.message);
     }
 }
 
-function generatePPT(name, stats) {
+function generatePPT(name, stats, images) {
     try {
         let pptx = new PptxGenJS();
         
-        let slide1 = pptx.addSlide();
-        slide1.addText("Reporte de Rendimiento Escolar", { x: 1, y: 1.5, w: "80%", fontSize: 32, bold: true, color: "0369a1", align: "center" });
-        slide1.addText(`Emitido el: ${new Date().toLocaleDateString()}`, { x: 1, y: 2.5, w: "80%", fontSize: 16, color: "64748b", align: "center" });
+        // Estilo Institucional
+        pptx.defineSlideMaster({
+            title: "MASTER_SLIDE",
+            background: { color: "F8FAFC" },
+            objects: [
+                { rect: { x: 0, y: 0, w: "100%", h: 0.6, fill: { color: "0EA5E9" } } },
+                { text: { text: "Julio C. Tello - Dashboard Académico", options: { x: 0.5, y: 0.15, w: 5, h: 0.3, color: "FFFFFF", fontSize: 14, bold: true } } },
+                { rect: { x: 0, y: 7.0, w: "100%", h: 0.5, fill: { color: "1E293B" } } },
+                { text: { text: "Generado automáticamente - Fecha: " + new Date().toLocaleDateString(), options: { x: 0.5, y: 7.15, w: "100%", h: 0.2, color: "94A3B8", fontSize: 10 } } }
+            ]
+        });
 
-        let slide2 = pptx.addSlide();
-        slide2.addText("Métricas Generales", { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: "0ea5e9" });
-        slide2.addText(`Total Alumnos: ${stats.students}\nCursos Evaluados: ${stats.courses}\n% Logrado Global: ${stats.pctLogrado}\nAlertas Activas: ${stats.alerts}`, 
-            { x: 0.5, y: 1.0, w: "90%", h: 2, fontSize: 18, bullet: true });
+        // Slide 1 - Portada
+        let slide1 = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+        slide1.addText("Reporte de Rendimiento Escolar", { x: 1, y: 2.5, w: "80%", fontSize: 36, bold: true, color: "0369a1", align: "center" });
+        slide1.addText(`Emitido el: ${new Date().toLocaleDateString()}\nAnálisis descriptivo y numérico`, { x: 1, y: 3.8, w: "80%", fontSize: 18, color: "64748b", align: "center" });
 
-        // Fortalezas y Debilidades en la misma o separadas
-        let slide3 = pptx.addSlide();
-        slide3.addText("Diagnóstico Cualitativo", { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: "334155" });
-        slide3.addText("Fortalezas:", { x: 0.5, y: 1.0, fontSize: 16, bold: true, color: "10b981" });
-        slide3.addText(stats.strengths.join('\n') || "No hay fortalezas registradas.", { x: 0.5, y: 1.4, w: "90%", h: 1.5, fontSize: 12, bullet: true });
+        // Slide 2 - Métricas Generales
+        let slide2 = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+        slide2.addText("Resumen Ejecutivo de Métricas", { x: 0.5, y: 0.8, fontSize: 24, bold: true, color: "0369a1" });
+        slide2.addText(`Total Alumnos Evaluados: ${stats.students}\nCursos Evaluados: ${stats.courses}\nPorcentaje Logrado Global: ${stats.pctLogrado}\nNivel de Cursos en Alerta: ${stats.alerts}`, 
+            { x: 0.5, y: 1.6, w: "90%", h: 3, fontSize: 20, bullet: true, color: "1e293b", fill: "e0f2fe" });
+
+        // Slide 3 - Cualitativo
+        let slide3 = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+        slide3.addText("Diagnóstico Cualitativo", { x: 0.5, y: 0.8, fontSize: 24, bold: true, color: "0369a1" });
+        slide3.addText("Fortalezas:", { x: 0.5, y: 1.4, fontSize: 16, bold: true, color: "10b981" });
+        slide3.addText(stats.strengths.join('\n') || "No hay fortalezas registradas.", { x: 0.5, y: 1.8, w: "90%", h: 1.8, fontSize: 14, bullet: true, color: "1e293b" });
         
-        slide3.addText("Oportunidades de Mejora:", { x: 0.5, y: 3.0, fontSize: 16, bold: true, color: "ef4444" });
-        slide3.addText(stats.weaknesses.join('\n') || "No hay riesgos críticos bajo estos filtros.", { x: 0.5, y: 3.4, w: "90%", h: 1.5, fontSize: 12, bullet: true });
+        slide3.addText("Oportunidades de Mejora:", { x: 0.5, y: 4.0, fontSize: 16, bold: true, color: "ef4444" });
+        slide3.addText(stats.weaknesses.join('\n') || "No hay riesgos críticos bajo estos filtros.", { x: 0.5, y: 4.4, w: "90%", h: 1.8, fontSize: 14, bullet: true, color: "1e293b" });
 
-        // Acciones recomendadas
+        // Slide 4 - Recomendaciones
         let recomendaciones = [];
         if (stats.weaknesses.length > 0) {
             recomendaciones = [
@@ -550,29 +734,75 @@ function generatePPT(name, stats) {
                 "Mantener el monitoreo continuo para prevenir descensos en trimestres futuros."
             ];
         }
+        let slide4 = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+        slide4.addText("Acciones Formativas Recomendadas", { x: 0.5, y: 0.8, fontSize: 24, bold: true, color: "f59e0b" });
+        slide4.addText(recomendaciones.join('\n\n'), { x: 0.5, y: 2.0, w: "90%", h: 3, fontSize: 18, bullet: true, color: "1e293b" });
 
-        let slide4 = pptx.addSlide();
-        slide4.addText("Acciones Recomendadas", { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: "f59e0b" });
-        slide4.addText(recomendaciones.join('\n\n'), { x: 0.5, y: 1.2, w: "90%", h: 3, fontSize: 16, bullet: true });
+        // Modulo de Graficos Imagenes
+        let iGlobal=0, pGlobal=0, lGlobal=0;
+        currentFilteredData.forEach(d => {
+            if (d.finalStatus === 1) iGlobal++;
+            else if (d.finalStatus === 2) pGlobal++;
+            else if (d.finalStatus === 3) lGlobal++;
+        });
 
-        // Desglose por Grados y Secciones
+        if(images.global || images.course) {
+            let slideGrafs1 = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+            slideGrafs1.addText("Visualizaciones: Logro y Desempeño General", { x: 0.5, y: 0.8, fontSize: 24, bold: true, color: "0369a1" });
+            
+            if(images.global) {
+                slideGrafs1.addImage({ data: images.global, x: 0.5, y: 1.6, w: 2.8, h: 3.5, sizing: { type: "contain" } });
+                slideGrafs1.addTable([
+                    [ { text: "Estado", options: { fill: "f1f5f9", bold: true } }, { text: "Cant.", options: { fill: "f1f5f9", bold: true } } ],
+                    [ { text: "Logrado", options: { fill: "d1fae5", bold: true, color: "065f46" } }, lGlobal ],
+                    [ { text: "Proceso", options: { fill: "fef3c7", bold: true, color: "92400e" } }, pGlobal ],
+                    [ { text: "Inicio", options: { fill: "fee2e2", bold: true, color: "991b1b" } }, iGlobal ],
+                    [ { text: "Total", options: { bold: true } }, (iGlobal+pGlobal+lGlobal) ]
+                ], { x: 3.4, y: 1.8, w: 1.2, border: {pt: 1, color: "cbd5e1"}, align: "center", fontSize: 11 });
+            }
+            if(images.course) {
+                slideGrafs1.addImage({ data: images.course, x: 5.0, y: 1.6, w: 2.8, h: 3.5, sizing: { type: "contain" } });
+                slideGrafs1.addTable([
+                    [ { text: "Detalles:", options: { bold:true, fill: "F8FAFC" } } ],
+                    [ { text: "Datos desglosados \npor docencia a \ncontinuación.", options: { fontSize: 10 } } ]
+                ], { x: 7.9, y: 1.8, w: 1.5, border: {pt: 0}, align: "left" });
+            }
+        }
+
+        if(images.radar || images.teacher) {
+            let slideGrafs2 = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+            slideGrafs2.addText("Visualizaciones: Competencias y Docentes", { x: 0.5, y: 0.8, fontSize: 24, bold: true, color: "0369a1" });
+            
+            if(images.radar) {
+                slideGrafs2.addImage({ data: images.radar, x: 0.5, y: 1.6, w: 2.8, h: 3.5, sizing: { type: "contain" } });
+                slideGrafs2.addTable([
+                    [ { text: "Nota:", options: { bold:true, fill: "F8FAFC" } } ],
+                    [ { text: "Promedios por \ncompetencia \nglobal", options: { fontSize: 10 } } ]
+                ], { x: 3.4, y: 1.8, w: 1.2, border: {pt: 0}, align: "left" });
+            }
+            if(images.teacher) {
+                slideGrafs2.addImage({ data: images.teacher, x: 5.0, y: 1.6, w: 4.5, h: 3.5, sizing: { type: "contain" } });
+            }
+        }
+
+        // Desglose Tabular por Grados y Secciones
         const gradeGroups = groupBy(currentFilteredData, 'grade');
         const grades = Object.keys(gradeGroups).sort();
         
         grades.forEach(g => {
-            let gradeSlide = pptx.addSlide();
-            gradeSlide.addText(`Desglose: Grado ${g || 'No Definido'}`, { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: "0369a1" });
+            let gradeSlide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+            gradeSlide.addText(`Análisis Tabular: Grado ${g || 'No Definido'}`, { x: 0.5, y: 0.8, fontSize: 24, bold: true, color: "0369a1" });
             
             const sectionsGroup = groupBy(gradeGroups[g], 'section');
             const sections = Object.keys(sectionsGroup).sort();
             
             let tableData = [
                 [
-                    { text:"Sección", options:{ bold:true, fill:"f1f5f9" } },
+                    { text:"Sección", options:{ bold:true, fill:"0EA5E9", color:"ffffff" } },
                     { text:"Alumnos", options:{ bold:true, fill:"f1f5f9" } },
-                    { text:"Logrado (Verde)", options:{ bold:true, fill:"f1f5f9", color:"10b981" } },
-                    { text:"Proceso (Amar.)", options:{ bold:true, fill:"f1f5f9", color:"f59e0b" } },
-                    { text:"Inicio (Rojo)", options:{ bold:true, fill:"f1f5f9", color:"ef4444" } },
+                    { text:"Logrado (V.)", options:{ bold:true, fill:"d1fae5", color:"065f46" } },
+                    { text:"Proceso (A.)", options:{ bold:true, fill:"fef3c7", color:"92400e" } },
+                    { text:"Inicio (R.)", options:{ bold:true, fill:"fee2e2", color:"991b1b" } },
                     { text:"% Logro", options:{ bold:true, fill:"f1f5f9" } }
                 ]
             ];
@@ -602,10 +832,10 @@ function generatePPT(name, stats) {
             });
 
             gradeSlide.addTable(tableData, { 
-                x: 0.5, y: 1.0, w: "90%", 
+                x: 0.5, y: 1.5, w: "90%", 
                 colW: [1.2, 1.2, 1.5, 1.5, 1.5, 1.2],
                 border: {pt: 1, color: "cbd5e1"},
-                align: "center", fontSize: 12 
+                align: "center", fontSize: 13 
             });
         });
 
@@ -619,7 +849,7 @@ function generatePPT(name, stats) {
     }
 }
 
-function generateWord(name, stats) {
+function generateWord(name, stats, images) {
     let recomendaciones = [];
     if (stats.weaknesses.length > 0) {
         recomendaciones = [
@@ -635,16 +865,23 @@ function generateWord(name, stats) {
         ];
     }
 
-    const recosHtml = recomendaciones.map(r => `<li>${r}</li>`).join('');
+    const recosHtml = recomendaciones.map(r => `<li style="margin-bottom:8px;">${r}</li>`).join('');
+
+    let iGlobal=0, pGlobal=0, lGlobal=0;
+    currentFilteredData.forEach(d => {
+        if (d.finalStatus === 1) iGlobal++;
+        else if (d.finalStatus === 2) pGlobal++;
+        else if (d.finalStatus === 3) lGlobal++;
+    });
 
     let content = `\uFEFF
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
     <head><meta charset='utf-8'><title>Reporte Académico</title></head>
-    <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-        <h1 style="color: #0369a1; text-align: center;">Informe Académico Detallado</h1>
-        <p style="text-align: center;"><strong>Fecha de emisión:</strong> ${new Date().toLocaleDateString()}</p>
-        <hr>
-        <h2>1. Resumen General</h2>
+    <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b;">
+        <h1 style="color: #0369a1; text-align: center; border-bottom: 2px solid #0ea5e9; padding-bottom: 10px;">Informe Académico Detallado</h1>
+        <p style="text-align: center; color: #64748b;"><strong>Fecha de emisión:</strong> ${new Date().toLocaleDateString()}</p>
+        
+        <h2 style="color: #0ea5e9;">1. Resumen Ejecutivo</h2>
         <ul>
             <li><strong>Total Alumnos (Muestra):</strong> ${stats.students}</li>
             <li><strong>Cursos Evaluados:</strong> ${stats.courses}</li>
@@ -652,16 +889,57 @@ function generateWord(name, stats) {
             <li><strong>Cursos en Alerta:</strong> ${stats.alerts}</li>
         </ul>
         
-        <h2>2. Diagnóstico Cualitativo</h2>
-        <h3 style="color: #166534;">Fortalezas</h3>
-        <ul>${stats.strengths.map(s => `<li>${s}</li>`).join('') || '<li>No hay fortalezas sobresalientes registradas.</li>'}</ul>
-        <h3 style="color: #991b1b;">Oportunidades de Mejora (Riesgos)</h3>
-        <ul>${stats.weaknesses.map(w => `<li>${w}</li>`).join('') || '<li>No hay riesgos críticos bajo estos filtros.</li>'}</ul>
+        <h2 style="color: #0ea5e9;">2. Diagnóstico Cualitativo</h2>
+        <h3 style="color: #10b981;">Fortalezas</h3>
+        <ul>${stats.strengths.map(s => `<li style="margin-bottom:8px;">${s}</li>`).join('') || '<li>No hay fortalezas sobresalientes registradas.</li>'}</ul>
+        <h3 style="color: #ef4444;">Oportunidades de Mejora (Riesgos)</h3>
+        <ul>${stats.weaknesses.map(w => `<li style="margin-bottom:8px;">${w}</li>`).join('') || '<li>No hay riesgos críticos bajo estos filtros.</li>'}</ul>
         
-        <h2>3. Acciones Formativas Recomendadas</h2>
+        <h2 style="color: #0ea5e9;">3. Acciones Formativas Recomendadas</h2>
         <ul>${recosHtml}</ul>
 
-        <h2>4. Desglose Detallado por Grado y Sección</h2>
+        <h2 style="color: #0ea5e9; page-break-before: always;">4. Anexo Visual: Gráficos de Datos</h2>
+        ${images.global ? `
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h4 style="color: #334155;">Distribución del Logro Académico</h4>
+                <table style="margin: 0 auto; width: 100%;">
+                    <tr>
+                        <td style="width: 70%; text-align:right;">
+                            <img src="${images.global}" style="width: 100%; max-width: 400px; height: auto;" />
+                        </td>
+                        <td style="width: 30%; vertical-align: middle; padding-left: 20px;">
+                            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; text-align: center; border-color: #cbd5e1; margin: 0 auto;">
+                                <tr style="background-color: #f1f5f9;"><th>Estado</th><th>Cant.</th></tr>
+                                <tr><td style="color: #10b981; font-weight: bold; background-color: #f0fdf4;">Logrado</td><td>${lGlobal}</td></tr>
+                                <tr><td style="color: #f59e0b; font-weight: bold; background-color: #fffbeb;">Proceso</td><td>${pGlobal}</td></tr>
+                                <tr><td style="color: #ef4444; font-weight: bold; background-color: #fef2f2;">Inicio</td><td>${iGlobal}</td></tr>
+                                <tr><td style="font-weight: bold; background-color: #f8fafc;">Total</td><td>${iGlobal+pGlobal+lGlobal}</td></tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        ` : ''}
+        ${images.course ? `
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h4 style="color: #334155;">Desempeño por Cursos Evaluados</h4>
+                <img src="${images.course}" style="width: 100%; max-width: 650px; height: auto;" />
+            </div>
+        ` : ''}
+        ${images.teacher ? `
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h4 style="color: #334155;">Comparativo de Resultados por Docente</h4>
+                <img src="${images.teacher}" style="width: 100%; max-width: 650px; height: auto;" />
+            </div>
+        ` : ''}
+        ${images.radar ? `
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h4 style="color: #334155;">Promedio del Logro por Competencias</h4>
+                <img src="${images.radar}" style="width: 100%; max-width: 450px; height: auto;" />
+            </div>
+        ` : ''}
+
+        <h2 style="color: #0ea5e9; page-break-before: always;">5. Desglose Estructural por Grado y Sección</h2>
     `;
     
     const gradeGroups = groupBy(currentFilteredData, 'grade');
@@ -675,7 +953,7 @@ function generateWord(name, stats) {
         const sectionsGroup = groupBy(gradeGroups[g], 'section');
         const sections = Object.keys(sectionsGroup).sort();
         
-        content += `<h3 style="color: #475569; margin-top: 30px;">▶ GRADO: ${g || 'No Definido'}</h3>`;
+        content += `<h3 style="color: #475569; margin-top: 30px; border-bottom: 1px solid #cbd5e1;">▶ GRADO: ${g || 'No Definido'}</h3>`;
         
         sections.forEach(s => {
             const studentsData = sectionsGroup[s];
@@ -693,22 +971,22 @@ function generateWord(name, stats) {
             
             content += `
                 <div style="margin-left: 20px; margin-bottom: 25px;">
-                    <h4 style="color: #334155; margin-bottom: 5px;">Sección: ${s || 'No Definida'}</h4>
-                    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 600px; text-align: center;">
-                        <tr style="background-color: #f1f5f9;">
+                    <h4 style="color: #0369a1; margin-bottom: 5px;">Sección: ${s || 'N/D'}</h4>
+                    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 650px; text-align: center; border-color: #cbd5e1;">
+                        <tr style="background-color: #0ea5e9; color: #ffffff;">
                             <th>Alumnos únicos</th>
                             <th>Total Notas</th>
-                            <th>Logrado (Verde)</th>
-                            <th>Proceso (Amarillo)</th>
-                            <th>Inicio (Rojo)</th>
+                            <th>Logrado (V)</th>
+                            <th>Proceso (A)</th>
+                            <th>Inicio (R)</th>
                             <th>% Logrado</th>
                         </tr>
                         <tr>
                             <td>${uniqueStudents}</td>
                             <td>${totalEvals}</td>
-                            <td style="color: #10b981; font-weight: bold;">${logrados}</td>
-                            <td style="color: #f59e0b; font-weight: bold;">${procesos}</td>
-                            <td style="color: #ef4444; font-weight: bold;">${inicios}</td>
+                            <td style="color: #10b981; font-weight: bold; background-color: #f0fdf4;">${logrados}</td>
+                            <td style="color: #f59e0b; font-weight: bold; background-color: #fffbeb;">${procesos}</td>
+                            <td style="color: #ef4444; font-weight: bold; background-color: #fef2f2;">${inicios}</td>
                             <td><strong>${pctLog}%</strong></td>
                         </tr>
                     </table>
